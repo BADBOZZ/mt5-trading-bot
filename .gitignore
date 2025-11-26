@@ -3,6 +3,8 @@
 *.ex4
 *.mq5
 *.mq4
+# Allow monitored source libraries
+!mt5-trading-bot/src/monitoring/*.mq5
 *.log
 
 # Build
