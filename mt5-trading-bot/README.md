@@ -29,3 +29,13 @@ python main.py
 - MT5 Server: FBS-Demo
 - Login: 105261321
 - Password: (configured in environment)
+
+## Monitoring Toolkit
+
+The repository now includes native MT5 libraries for runtime monitoring:
+
+- `src/monitoring/Logger.mq5` – leveled logging with rotation and console mirroring.
+- `src/monitoring/Alerts.mq5` – channel-aware alert router (terminal, push, email) with throttling.
+- `src/monitoring/PerformanceTracker.mq5` – aggregates balance/equity, drawdown, win-rate, and emits alerts through the logger/alert stack.
+
+Use `src/monitoring/manager.py` to build the bootstrap payload for these libraries. The `MonitoringManager.bootstrap_payload()` helper provides the dictionary you can pass to your MT5 bridge script so the bot and MQL runtime stay in sync regarding alert prefixes, drawdown thresholds, and log file locations.
