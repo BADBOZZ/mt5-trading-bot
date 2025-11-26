@@ -19,3 +19,6 @@ Thumbs.db
 
 # Node modules (if any)
 node_modules/
+# Required strategy tester sources
+!mt5-trading-bot/src/backtesting/PerformanceAnalyzer.mq5
+!mt5-trading-bot/tests/BacktestConfig.mq5
