@@ -2,10 +2,13 @@
 from datetime import timedelta
 import unittest
 
+from src.core.types import SignalType, StrategyRecommendation
 from src.risk.config import RiskConfig
 from src.risk.limits import RiskLimits
+from src.risk.risk_engine import RiskEngine
 from src.risk.position_sizing import calculate_position_size
 from src.risk.state import AccountState, PositionState, RiskState
+from src.security.safety_controller import SafetyController
 
 
 class RiskLimitsTests(unittest.TestCase):
@@ -107,6 +110,52 @@ class PositionSizingTests(unittest.TestCase):
         size = calculate_position_size(10_000, 1.2, 1.15, self.config)
         max_value = 10_000 * self.config.max_position_size_pct / 1.2
         self.assertLessEqual(size, max_value)
+
+
+class SafetyControllerTests(unittest.TestCase):
+    """Validate the security layer behavior."""
+
+    def setUp(self):
+        self.risk_engine = RiskEngine(RiskConfig())
+        self.controller = SafetyController(self.risk_engine, min_confidence=0.4)
+        self.account = AccountState(
+            balance=10_000.0,
+            equity=10_000.0,
+            margin=0.0,
+            free_margin=10_000.0,
+            margin_level=200.0,
+        )
+        self.risk_engine.update_account_state(self.account)
+
+    def _recommendation(self, **overrides) -> StrategyRecommendation:
+        base = dict(
+            symbol="EURUSD",
+            timeframe="H1",
+            signal=SignalType.BUY,
+            confidence=0.8,
+            entry_price=1.1000,
+            stop_loss=1.0950,
+            take_profit=1.1100,
+        )
+        base.update(overrides)
+        return StrategyRecommendation(**base)
+
+    def test_rejects_missing_stop_loss(self):
+        rec = self._recommendation(stop_loss=None)
+        result = self.controller.validate_recommendation(rec)
+        self.assertFalse(result.passed)
+        self.assertIn("Stop loss missing", result.violations[0])
+
+    def test_rejects_low_confidence_signal(self):
+        rec = self._recommendation(confidence=0.1)
+        result = self.controller.validate_recommendation(rec)
+        self.assertFalse(result.passed)
+        self.assertTrue(any("Confidence" in msg for msg in result.violations))
+
+    def test_accepts_risk_compliant_trade(self):
+        rec = self._recommendation()
+        result = self.controller.validate_recommendation(rec)
+        self.assertTrue(result.passed)
 
 
 if __name__ == "__main__":
