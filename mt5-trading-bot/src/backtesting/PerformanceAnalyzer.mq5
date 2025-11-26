@@ -2,20 +2,14 @@
 #property tester_indicator
 #property script_show_inputs
 
+#include "OptimizationParams.mqh"
+
 // Performance analyzer for MT5 Strategy Tester integration. Tracks trade-level
 // data in order to calculate optimization criteria and export rich reports that
 // the Strategy Tester can consume when running optimizations, walk-forward
 // simulations, and multi-currency passes.
 
-enum ENUM_OPT_CRITERION
-  {
-   OPT_CRITERION_RECOVERY = 0,
-   OPT_CRITERION_SHARPE   = 1,
-   OPT_CRITERION_PROFIT   = 2,
-   OPT_CRITERION_MAXDD    = 3
-  };
-
-input ENUM_OPT_CRITERION InpOptimizationCriterion = OPT_CRITERION_RECOVERY;
+input ENUM_OPTIMIZATION_CRITERIA InpOptimizationCriterion = OPT_CRITERIA_RECOVERY;
 input double             InpRiskFreeRate         = 0.02;   // annual risk free rate
 input bool               InpExportTradeHistory   = true;
 input bool               InpExportEquityCurve    = true;
@@ -204,6 +198,11 @@ public:
       return m_grossProfit/m_grossLoss;
      }
 
+   double       NetProfit() const
+     {
+      return m_netProfit;
+     }
+
    double       RecoveryFactor() const
      {
       if(m_maxDrawdown==0.0)
@@ -307,22 +306,24 @@ string ComposeReportName(const string suffix)
 
 double SelectCriterion()
   {
-   switch(InpOptimizationCriterion)
-     {
-      case OPT_CRITERION_SHARPE:
-         return g_analyzer.SharpeRatio();
-      case OPT_CRITERION_PROFIT:
-         return g_analyzer.ProfitFactor();
-      case OPT_CRITERION_MAXDD:
-         return -g_analyzer.MaxDrawdown();
-      case OPT_CRITERION_RECOVERY:
-      default:
-         return g_analyzer.RecoveryFactor();
-     }
+   return EvaluateOptimizationCriterion(InpOptimizationCriterion,
+                                        g_analyzer.NetProfit(),
+                                        g_analyzer.MaxDrawdown(),
+                                        g_analyzer.SharpeRatio(),
+                                        g_analyzer.ProfitFactor(),
+                                        g_analyzer.WinRate());
+  }
+
+bool RefreshAnalyzer()
+  {
+   const datetime from_time = (datetime)TesterStatistics(STAT_START_DATE);
+   const datetime to_time   = (datetime)TesterStatistics(STAT_END_DATE);
+   return g_analyzer.CollectHistory(from_time,to_time);
   }
 
 int OnInit()
   {
+   SelectOptimizationSymbols();
    g_analyzer.Reset();
    return(INIT_SUCCEEDED);
   }
@@ -330,13 +331,13 @@ int OnInit()
 void OnTesterInit()
   {
    g_analyzer.Reset();
+   ExportOptimizationManifest(ComposeReportName("optimization_params.csv"));
+   ExportWalkForwardPlan(ComposeReportName("walkforward.csv"));
   }
 
 double OnTester()
   {
-   const datetime from_time = (datetime)TesterStatistics(STAT_START_DATE);
-   const datetime to_time   = (datetime)TesterStatistics(STAT_END_DATE);
-   if(!g_analyzer.CollectHistory(from_time,to_time))
+   if(!RefreshAnalyzer())
       return 0.0;
 
    if(InpExportTradeHistory)
@@ -355,6 +356,9 @@ double OnTester()
 
 void OnTesterPass()
   {
+   if(!RefreshAnalyzer())
+      return;
+
    const double criterion = SelectCriterion();
    if(InpExportStrategySheet)
       g_analyzer.ExportStrategySnapshot(ComposeReportName("strategies.csv"),Symbol(),criterion);
