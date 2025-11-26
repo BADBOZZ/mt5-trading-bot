@@ -19,3 +19,10 @@ Thumbs.db
 
 # Node modules (if any)
 node_modules/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+.env.local
