@@ -3,6 +3,8 @@
 *.ex4
 *.mq5
 *.mq4
+# allow committed monitoring modules
+!/mt5-trading-bot/src/monitoring/*.mq5
 *.log
 
 # Build
