@@ -14,9 +14,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Deque, Dict, Iterable, Optional
 
-MQL_LOGGER_LIB = "src/monitoring/Logger.mq5"
-MQL_ALERTS_LIB = "src/monitoring/Alerts.mq5"
-MQL_PERFORMANCE_LIB = "src/monitoring/PerformanceTracker.mq5"
+from .config import MonitoringPaths
+
+_PATHS = MonitoringPaths()
+MQL_LOGGER_LIB = _PATHS.logger
+MQL_ALERTS_LIB = _PATHS.alerts
+MQL_PERFORMANCE_LIB = _PATHS.performance
 
 
 @dataclass
