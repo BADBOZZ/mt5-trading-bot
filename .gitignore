@@ -5,6 +5,11 @@
 *.mq4
 *.log
 
+# Allow source-controlled MT5 scripts
+!mt5-trading-bot/src/backtesting/*.mq5
+!mt5-trading-bot/src/backtesting/*.mqh
+!mt5-trading-bot/tests/*.mq5
+
 # Build
 MQL5/Logs/
 MQL5/Files/
