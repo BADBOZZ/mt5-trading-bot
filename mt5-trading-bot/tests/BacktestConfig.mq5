@@ -1,7 +1,7 @@
 #property strict
 #property script_show_inputs
 
-#include "..\\src\\backtesting\\OptimizationParams.mqh"
+#include "../src/backtesting/OptimizationParams.mqh"
 
 // Script that configures the MT5 Strategy Tester to run multi-currency walk-
 // forward optimizations using the same parameter ranges that the EA consumes.
