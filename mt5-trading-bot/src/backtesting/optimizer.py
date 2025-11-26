@@ -67,6 +67,31 @@ class ParameterSpace:
             lines.append(f"{definition.name}.set={definition.mt5_hint()}")
         return "\n".join(lines)
 
+    def describe(self) -> List[dict]:
+        """Return a serializable description of the parameter search space."""
+
+        summary: List[dict] = []
+        for definition in self.definitions:
+            if isinstance(definition, ParameterRange):
+                summary.append(
+                    {
+                        "name": definition.name,
+                        "type": "range",
+                        "start": definition.start,
+                        "stop": definition.stop,
+                        "step": definition.step,
+                    }
+                )
+            else:
+                summary.append(
+                    {
+                        "name": definition.name,
+                        "type": "choice",
+                        "options": list(definition.options),
+                    }
+                )
+        return summary
+
 
 def default_space() -> ParameterSpace:
     """Return a sensible default grid for the provided EA."""

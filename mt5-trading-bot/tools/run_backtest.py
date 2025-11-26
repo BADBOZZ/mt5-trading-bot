@@ -47,6 +47,29 @@ def _load_trade_history(path: Path) -> List[dict]:
         ]
 
 
+def _export_plan(path: Path, jobs: List[StrategyTesterJob], space: ParameterSpace | None) -> None:
+    plan = {
+        "jobs": [
+            {
+                "expert": job.expert_name,
+                "symbols": list(job.symbols),
+                "timeframe": job.timeframe,
+                "start": job.start_date.strftime("%Y-%m-%d"),
+                "end": job.end_date.strftime("%Y-%m-%d"),
+                "optimization_mode": job.optimization_mode,
+                "optimization_criterion": job.optimization_criterion,
+                "walk_forward": job.walk_forward.to_mt5_forward_mode() if job.walk_forward else None,
+            }
+            for job in jobs
+        ],
+        "parameter_space": space.describe() if space else [],
+    }
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(plan, indent=2))
+    print(f"Saved optimization plan to {path}")
+
+
 def _build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--expert", required=True, help="Name of the EA/Expert file.")
@@ -88,6 +111,11 @@ def _build_argument_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Include default parameter ranges (.set file generation).",
     )
+    parser.add_argument(
+        "--export-plan",
+        type=Path,
+        help="Optional path to write the JSON optimization blueprint.",
+    )
     return parser
 
 
@@ -127,6 +155,9 @@ def main() -> None:
     print(f"Generated {len(paths)} tester job(s) in {args.workspace}")
     for path in paths:
         print(f" - {path.name}")
+
+    if args.export_plan:
+        _export_plan(args.export_plan, jobs, param_space)
 
     if args.trade_history:
         trades = _load_trade_history(args.trade_history)
