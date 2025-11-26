@@ -2,6 +2,9 @@
 //| RiskManager.mq5                                                 |
 //| Calculates position sizes based on uniform risk rules.          |
 //+------------------------------------------------------------------+
+#ifndef __RISK_MANAGER_MQ5__
+#define __RISK_MANAGER_MQ5__
+
 #include "..\config\risk-config.mqh"
 
 namespace RiskManager
@@ -143,3 +146,5 @@ namespace RiskManager
       return true;
      }
   }
+
+#endif // __RISK_MANAGER_MQ5__
