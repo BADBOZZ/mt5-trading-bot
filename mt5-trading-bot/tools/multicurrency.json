@@ -1,0 +1,4 @@
+{
+  "major": ["EURUSD", "GBPUSD", "USDJPY"],
+  "risk_off": ["XAUUSD", "USDCHF", "USDCAD"]
+}
