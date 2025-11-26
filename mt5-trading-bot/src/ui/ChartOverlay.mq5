@@ -58,6 +58,9 @@ private:
    SignalInfo       m_signalRows[];
    StrategyPerformance m_performanceRows[];
 
+   string           m_prefix;
+   string           m_markerPrefix;
+
    struct PerfAccumulator
      {
       string name;
@@ -81,7 +84,9 @@ public:
                        m_corner(CORNER_RIGHT_UPPER),
                        m_showPositions(true),
                        m_showSignals(true),
-                       m_showPerformance(true)
+                       m_showPerformance(true),
+                       m_prefix("MT5BOT"),
+                       m_markerPrefix("MT5BOT_MARKER_")
                        {}
 
    bool              Init(const long chartId)
@@ -94,7 +99,7 @@ public:
 
       if(!m_infoPanel.Init(
          m_chartId,
-         "MT5BOT",
+         m_prefix,
          m_corner,
          InpPanelOffsetX,
          InpPanelOffsetY,
@@ -108,7 +113,7 @@ public:
 
       if(!m_positionDisplay.Init(
          m_chartId,
-         "MT5BOT",
+         m_prefix,
          m_corner,
          InpPanelOffsetX,
          InpPanelOffsetY + m_infoPanel.Height() + InpPanelPadding,
@@ -123,7 +128,7 @@ public:
 
       if(!m_signalDisplay.Init(
          m_chartId,
-         "MT5BOT",
+         m_prefix,
          m_corner,
          InpPanelOffsetX,
          InpPanelOffsetY + m_infoPanel.Height() + m_positionDisplay.Height() + (InpPanelPadding*2),
@@ -138,7 +143,7 @@ public:
 
       if(!m_performanceDashboard.Init(
          m_chartId,
-         "MT5BOT",
+         m_prefix,
          m_corner,
          InpPanelOffsetX,
          InpPanelOffsetY + m_infoPanel.Height() + m_positionDisplay.Height() + m_signalDisplay.Height() + (InpPanelPadding*3),
@@ -196,6 +201,8 @@ public:
         }
       else
          m_performanceDashboard.SetVisible(false);
+
+      DrawVisualMarkers();
      }
 
    void              Shutdown()
@@ -361,6 +368,196 @@ public:
       int newIndex = ArraySize(signals);
       ArrayResize(signals,newIndex+1);
       signals[newIndex] = info;
+     }
+
+   void              DrawVisualMarkers()
+     {
+      string activeObjects[];
+      DrawPositionMarkers(activeObjects);
+      DrawSignalMarkers(activeObjects);
+      DrawExitMarkers(activeObjects);
+      CleanupMarkerObjects(activeObjects);
+     }
+
+   void              DrawPositionMarkers(string &activeObjects[])
+     {
+      CPositionInfo pos;
+      for(int i=0;i<PositionsTotal();i++)
+        {
+         if(!pos.SelectByIndex(i))
+            continue;
+         ulong ticket = pos.Ticket();
+         datetime entryTime = pos.Time();
+         double entryPrice  = pos.PriceOpen();
+         string entryName = StringFormat("%sENTRY_%I64u",m_markerPrefix,ticket);
+         ENUM_OBJECT arrowType = pos.PositionType()==POSITION_TYPE_BUY ? OBJ_ARROW_BUY : OBJ_ARROW_SELL;
+         color arrowColor = pos.PositionType()==POSITION_TYPE_BUY ? InpPositiveColor : InpNegativeColor;
+         if(EnsureObject(entryName,arrowType))
+           {
+            ObjectSetInteger(m_chartId,entryName,OBJPROP_TIME,0,entryTime);
+            ObjectSetDouble(m_chartId,entryName,OBJPROP_PRICE,0,entryPrice);
+            ObjectSetInteger(m_chartId,entryName,OBJPROP_COLOR,arrowColor);
+            ObjectSetInteger(m_chartId,entryName,OBJPROP_WIDTH,2);
+            ObjectSetInteger(m_chartId,entryName,OBJPROP_SELECTABLE,false);
+            ObjectSetInteger(m_chartId,entryName,OBJPROP_SELECTED,false);
+            ObjectSetString(m_chartId,entryName,OBJPROP_TOOLTIP,
+                            StringFormat("%s entry %.5f",pos.Symbol(),entryPrice));
+            RegisterActiveObject(activeObjects,entryName);
+           }
+
+         if(pos.StopLoss() > 0)
+           {
+            string slName = StringFormat("%sSL_%I64u",m_markerPrefix,ticket);
+            if(EnsureObject(slName,OBJ_HLINE))
+              {
+               ObjectSetDouble(m_chartId,slName,OBJPROP_PRICE,0,pos.StopLoss());
+               ObjectSetInteger(m_chartId,slName,OBJPROP_COLOR,InpNegativeColor);
+               ObjectSetInteger(m_chartId,slName,OBJPROP_STYLE,STYLE_DOT);
+               ObjectSetInteger(m_chartId,slName,OBJPROP_WIDTH,1);
+               ObjectSetInteger(m_chartId,slName,OBJPROP_SELECTABLE,false);
+               RegisterActiveObject(activeObjects,slName);
+              }
+           }
+
+         if(pos.TakeProfit() > 0)
+           {
+            string tpName = StringFormat("%sTP_%I64u",m_markerPrefix,ticket);
+            if(EnsureObject(tpName,OBJ_HLINE))
+              {
+               ObjectSetDouble(m_chartId,tpName,OBJPROP_PRICE,0,pos.TakeProfit());
+               ObjectSetInteger(m_chartId,tpName,OBJPROP_COLOR,InpPositiveColor);
+               ObjectSetInteger(m_chartId,tpName,OBJPROP_STYLE,STYLE_DASH);
+               ObjectSetInteger(m_chartId,tpName,OBJPROP_WIDTH,1);
+               ObjectSetInteger(m_chartId,tpName,OBJPROP_SELECTABLE,false);
+               RegisterActiveObject(activeObjects,tpName);
+              }
+           }
+        }
+     }
+
+   void              DrawSignalMarkers(string &activeObjects[])
+     {
+      datetime now = TimeCurrent();
+      for(int i=0;i<ArraySize(m_signalRows);i++)
+        {
+         double price = ResolveSignalPrice(m_signalRows[i]);
+         if(price <= 0.0)
+            continue;
+
+         datetime markerTime = (m_signalRows[i].timestamp == 0 ? now : m_signalRows[i].timestamp) + (i*60);
+         string sanitized = SanitizeName(m_signalRows[i].strategy + "_" + m_signalRows[i].symbol + "_" + IntegerToString(i));
+         string sigName = StringFormat("%sSIG_%s",m_markerPrefix,sanitized);
+         ENUM_OBJECT arrowType = (m_signalRows[i].type==ORDER_TYPE_BUY ? OBJ_ARROW_BUY : OBJ_ARROW_SELL);
+         color arrowColor = (m_signalRows[i].type==ORDER_TYPE_BUY ? InpPositiveColor : InpNegativeColor);
+         if(EnsureObject(sigName,arrowType))
+           {
+            ObjectSetInteger(m_chartId,sigName,OBJPROP_TIME,0,markerTime);
+            ObjectSetDouble(m_chartId,sigName,OBJPROP_PRICE,0,price);
+            ObjectSetInteger(m_chartId,sigName,OBJPROP_COLOR,arrowColor);
+            ObjectSetInteger(m_chartId,sigName,OBJPROP_WIDTH,1);
+            ObjectSetInteger(m_chartId,sigName,OBJPROP_SELECTABLE,false);
+            ObjectSetString(m_chartId,sigName,OBJPROP_TOOLTIP,
+                            StringFormat("Signal %s %s conf %.1f",
+                                         m_signalRows[i].strategy,
+                                         m_signalRows[i].symbol,
+                                         m_signalRows[i].confidence));
+            RegisterActiveObject(activeObjects,sigName);
+           }
+        }
+     }
+
+   void              DrawExitMarkers(string &activeObjects[])
+     {
+      datetime now = TimeCurrent();
+      datetime dayStart = now - (now % 86400);
+      int drawn = 0;
+      for(int i=HistoryDealsTotal()-1;i>=0 && drawn<10;i--)
+        {
+         ulong ticket = HistoryDealGetTicket(i);
+         if(ticket == 0)
+            continue;
+         datetime dealTime = (datetime)HistoryDealGetInteger(ticket,DEAL_TIME);
+         if(dealTime < dayStart)
+            break;
+         long entry = HistoryDealGetInteger(ticket,DEAL_ENTRY);
+         if(entry != DEAL_ENTRY_OUT && entry != DEAL_ENTRY_INOUT)
+            continue;
+         double price = HistoryDealGetDouble(ticket,DEAL_PRICE);
+         double profit = HistoryDealGetDouble(ticket,DEAL_PROFIT)
+                         + HistoryDealGetDouble(ticket,DEAL_SWAP)
+                         + HistoryDealGetDouble(ticket,DEAL_COMMISSION);
+         string exitName = StringFormat("%sEXIT_%I64u",m_markerPrefix,ticket);
+         if(EnsureObject(exitName,OBJ_ARROW))
+           {
+            ObjectSetInteger(m_chartId,exitName,OBJPROP_TIME,0,dealTime);
+            ObjectSetDouble(m_chartId,exitName,OBJPROP_PRICE,0,price);
+            ObjectSetInteger(m_chartId,exitName,OBJPROP_ARROWCODE,159);
+            ObjectSetInteger(m_chartId,exitName,OBJPROP_COLOR,(profit >= 0.0 ? InpPositiveColor : InpNegativeColor));
+            ObjectSetInteger(m_chartId,exitName,OBJPROP_WIDTH,1);
+            ObjectSetInteger(m_chartId,exitName,OBJPROP_SELECTABLE,false);
+            ObjectSetString(m_chartId,exitName,OBJPROP_TOOLTIP,
+                            StringFormat("Exit PnL %.2f",profit));
+            RegisterActiveObject(activeObjects,exitName);
+           }
+         drawn++;
+        }
+     }
+
+   double            ResolveSignalPrice(const SignalInfo &signal) const
+     {
+      if(!SymbolSelect(signal.symbol,true))
+         return(0.0);
+      double bid = 0.0, ask = 0.0;
+      if(!SymbolInfoDouble(signal.symbol,SYMBOL_BID,bid) ||
+         !SymbolInfoDouble(signal.symbol,SYMBOL_ASK,ask))
+         return(0.0);
+      return(signal.type==ORDER_TYPE_BUY ? ask : bid);
+     }
+
+   void              RegisterActiveObject(string &list[],const string name) const
+     {
+      int newIndex = ArraySize(list);
+      ArrayResize(list,newIndex+1);
+      list[newIndex] = name;
+     }
+
+   bool              ContainsObject(const string &list[],const string name) const
+     {
+      for(int i=0;i<ArraySize(list);i++)
+        {
+         if(list[i] == name)
+            return(true);
+        }
+      return(false);
+     }
+
+   void              CleanupMarkerObjects(const string &activeObjects[])
+     {
+      int total = ObjectsTotal(m_chartId,0,-1);
+      for(int i=total-1;i>=0;i--)
+        {
+         string objName = ObjectName(m_chartId,i,0,-1);
+         if(StringFind(objName,m_markerPrefix) != 0)
+            continue;
+         if(!ContainsObject(activeObjects,objName))
+            ObjectDelete(m_chartId,objName);
+        }
+     }
+
+   bool              EnsureObject(const string name,const ENUM_OBJECT type)
+     {
+      if(ObjectFind(m_chartId,name) != -1)
+         return(true);
+      return(ObjectCreate(m_chartId,name,type,0,0,0));
+     }
+
+   string            SanitizeName(string value) const
+     {
+      StringReplace(value," ","_");
+      StringReplace(value,"|","_");
+      StringReplace(value,":","_");
+      StringReplace(value,"/","_");
+      return(value);
      }
 
    void              CollectPerformanceStats(StrategyPerformance &stats[])
