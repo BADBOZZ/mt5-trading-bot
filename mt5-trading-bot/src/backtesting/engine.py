@@ -5,9 +5,9 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, List, Sequence
+from typing import Any, Dict, Iterable, List, Sequence
 
-from .data_loader import TradeHistoryExporter
+from .data_loader import BacktestReportBuilder, StrategyComparisonReport, TradeHistoryExporter
 from .walkforward import WalkForwardWindow, generate_walk_forward_windows
 
 
@@ -175,6 +175,25 @@ class StrategyTesterIntegration:
         trades = exporter.extract_trades()
         output_csv.write_text("\n".join(trades), encoding="utf-8")
         return output_csv
+
+    def build_report(
+        self,
+        trades_csv: Path,
+        metrics: Dict[str, float],
+        output_json: Path,
+        comparison: Sequence[Dict[str, Any]] | None = None,
+    ) -> Path:
+        """Construct a JSON report containing metrics, trades, and chart data."""
+        builder = BacktestReportBuilder(trades_csv, metrics)
+        return builder.build(output_json, comparison)
+
+    @staticmethod
+    def summarize_strategies(strategies: Dict[str, Dict[str, float]]) -> List[Dict[str, Any]]:
+        """Return a ranking for multiple strategy variants."""
+        comparison = StrategyComparisonReport()
+        for name, metrics in strategies.items():
+            comparison.add_strategy(name, metrics)
+        return comparison.summarize()
 
     def summarize_job_plan(self, jobs: Sequence[StrategyTesterJob]) -> str:
         """Return a JSON summary describing the planned Strategy Tester jobs."""

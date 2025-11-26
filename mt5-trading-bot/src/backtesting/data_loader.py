@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from io import StringIO
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, Iterable, List, Sequence
 from html.parser import HTMLParser
 
 
@@ -95,10 +95,17 @@ class BacktestReportBuilder:
     trades_csv: Path
     metrics: Dict[str, float]
 
-    def build(self, output_json: Path) -> Path:
+    def build(
+        self,
+        output_json: Path,
+        comparison: Sequence[Dict[str, Any]] | None = None,
+    ) -> Path:
+        chart = PerformanceChartBuilder(self.trades_csv).build()
         payload = {
             "metrics": self.metrics,
             "trades": self._load_trades(),
+            "chart": chart,
+            "comparison": list(comparison or []),
         }
         output_json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         return output_json
@@ -109,3 +116,63 @@ class BacktestReportBuilder:
         with self.trades_csv.open(encoding="utf-8") as handle:
             reader = csv.DictReader(handle)
             return list(reader)
+
+
+class PerformanceChartBuilder:
+    """Converts trade history rows into chart-friendly points."""
+
+    def __init__(self, trades_csv: Path) -> None:
+        self.trades_csv = trades_csv
+
+    def build(self) -> List[Dict[str, float]]:
+        trades = self._load_trades()
+        points: List[Dict[str, float]] = []
+        cumulative_profit = 0.0
+        for idx, trade in enumerate(trades, start=1):
+            profit = self._to_float(trade, "profit")
+            balance = self._to_float(trade, "balance") or (points[-1]["balance"] + profit if points else profit)
+            cumulative_profit += profit
+            points.append(
+                {
+                    "index": float(idx),
+                    "balance": balance,
+                    "cumulative_profit": cumulative_profit,
+                }
+            )
+        return points
+
+    def _load_trades(self) -> List[Dict[str, str]]:
+        if not self.trades_csv.exists():
+            return []
+        with self.trades_csv.open(encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            return list(reader)
+
+    @staticmethod
+    def _to_float(row: Dict[str, str], key_hint: str) -> float:
+        for key, value in row.items():
+            if key_hint.lower() in key.lower():
+                try:
+                    return float(value.replace(",", ""))
+                except ValueError:
+                    return 0.0
+        return 0.0
+
+
+class StrategyComparisonReport:
+    """Aggregates metrics across multiple strategies for quick review."""
+
+    def __init__(self) -> None:
+        self._entries: List[Dict[str, Any]] = []
+
+    def add_strategy(self, name: str, metrics: Dict[str, float]) -> None:
+        record = {"name": name}
+        record.update(metrics)
+        self._entries.append(record)
+
+    def summarize(self) -> List[Dict[str, Any]]:
+        return sorted(self._entries, key=lambda entry: entry.get("sharpe", 0.0), reverse=True)
+
+    def extend(self, entries: Iterable[Dict[str, Any]]) -> None:
+        for entry in entries:
+            self._entries.append(dict(entry))
