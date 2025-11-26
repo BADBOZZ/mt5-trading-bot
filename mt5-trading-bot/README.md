@@ -29,3 +29,28 @@ python main.py
 - MT5 Server: FBS-Demo
 - Login: 105261321
 - Password: (configured in environment)
+
+## Backtesting & Optimisation
+
+Run the pure-Python Strategy Tester against CSV exports (one file per symbol):
+
+```bash
+python tools/run_backtest.py \
+  --data-dir data/history \
+  --symbols EURUSD GBPUSD \
+  --timeframe M15
+```
+
+To grid-search strategy inputs (mirrors MT5 Strategy Tester optimisation) provide a JSON payload where keys follow `<strategy>.<parameter>` naming:
+
+```bash
+python tools/run_backtest.py \
+  --data-dir data/history \
+  --symbols EURUSD GBPUSD \
+  --timeframe M15 \
+  --optimize grids/trend.json \
+  --objective sharpe \
+  --top-n 3
+```
+
+The CLI will print aggregated performance metrics and, when `--output-json` is supplied, persist the equity curve plus trade log for downstream dashboards.
