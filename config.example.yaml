@@ -1,0 +1,21 @@
+data:
+  data_path: data/historical_ohlcv.csv
+  window_size: 256
+  prediction_horizon: 12
+  target_smoothing: 0.2
+model:
+  hidden_dim: 256
+  temporal_kernel_size: 5
+  dilations: [1, 2, 4, 8]
+  num_lstm_layers: 2
+  attn_heads: 4
+training:
+  epochs: 50
+  batch_size: 64
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  early_stopping_patience: 8
+  checkpoint_dir: artifacts/models
+inference:
+  signal_output: artifacts/signals/ai_signals.csv
+  min_confidence: 0.55
