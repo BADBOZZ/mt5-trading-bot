@@ -3,6 +3,10 @@
 *.ex4
 *.mq5
 *.mq4
+# tracked MT5 Strategy Tester scaffolding
+!/mt5-trading-bot/src/backtesting/PerformanceAnalyzer.mq5
+!/mt5-trading-bot/src/backtesting/OptimizationParams.mqh
+!/mt5-trading-bot/tests/BacktestConfig.mq5
 *.log
 
 # Build
