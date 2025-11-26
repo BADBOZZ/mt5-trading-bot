@@ -7,6 +7,7 @@
 #include <Trade\PositionInfo.mqh>
 #include <Trade\DealInfo.mqh>
 #include <Trade\Trade.mqh>
+#include <Math\Stat.mqh>
 
 #include "InfoPanel.mqh"
 #include "PositionDisplay.mqh"
@@ -50,13 +51,28 @@ private:
    InfoPanel        m_infoPanel;
    PositionDisplay  m_positionDisplay;
    SignalDisplay    m_signalDisplay;
+   PerformanceDashboard m_performanceDashboard;
    RiskSnapshot     m_riskSnapshot;
    StrategyStatus   m_strategyStatuses[];
    PositionRow      m_positionRows[];
-    SignalInfo       m_signalRows[];
+   SignalInfo       m_signalRows[];
+   StrategyPerformance m_performanceRows[];
+
+   struct PerfAccumulator
+     {
+      string name;
+      int    wins;
+      int    losses;
+      double winSum;
+      double lossSum;
+      int    trades;
+      double best;
+      double worst;
+     };
 
    bool             m_showPositions;
    bool             m_showSignals;
+   bool             m_showPerformance;
 
 public:
                      ChartOverlayController()
@@ -64,7 +80,8 @@ public:
                        m_initialized(false),
                        m_corner(CORNER_RIGHT_UPPER),
                        m_showPositions(true),
-                       m_showSignals(true)
+                       m_showSignals(true),
+                       m_showPerformance(true)
                        {}
 
    bool              Init(const long chartId)
@@ -73,6 +90,7 @@ public:
       m_corner      = GetCornerFromInput();
       m_showPositions = InpShowPositionsPanel;
       m_showSignals   = InpShowSignalsPanel;
+      m_showPerformance = InpShowPerformancePanel;
 
       if(!m_infoPanel.Init(
          m_chartId,
@@ -118,6 +136,21 @@ public:
          return(false);
       m_signalDisplay.SetVisible(m_showSignals);
 
+      if(!m_performanceDashboard.Init(
+         m_chartId,
+         "MT5BOT",
+         m_corner,
+         InpPanelOffsetX,
+         InpPanelOffsetY + m_infoPanel.Height() + m_positionDisplay.Height() + m_signalDisplay.Height() + (InpPanelPadding*3),
+         InpPanelWidth,
+         InpFontSize,
+         InpPrimaryColor,
+         InpPositiveColor,
+         InpNegativeColor,
+         InpPanelBackground))
+         return(false);
+      m_performanceDashboard.SetVisible(m_showPerformance);
+
       m_initialized = true;
       return(true);
      }
@@ -149,9 +182,20 @@ public:
          m_signalDisplay.SetCorner(m_corner,InpPanelOffsetX,nextOffset);
          m_signalDisplay.SetVisible(true);
          m_signalDisplay.Update(m_signalRows);
+         nextOffset += m_signalDisplay.Height() + InpPanelPadding;
         }
       else
          m_signalDisplay.SetVisible(false);
+
+      if(m_showPerformance)
+        {
+         CollectPerformanceStats(m_performanceRows);
+         m_performanceDashboard.SetCorner(m_corner,InpPanelOffsetX,nextOffset);
+         m_performanceDashboard.SetVisible(true);
+         m_performanceDashboard.Update(m_performanceRows);
+        }
+      else
+         m_performanceDashboard.SetVisible(false);
      }
 
    void              Shutdown()
@@ -160,6 +204,7 @@ public:
       m_infoPanel.Destroy();
       m_positionDisplay.Destroy();
       m_signalDisplay.Destroy();
+      m_performanceDashboard.Destroy();
      }
 
    ENUM_BASE_CORNER  GetCornerFromInput() const
@@ -316,6 +361,101 @@ public:
       int newIndex = ArraySize(signals);
       ArrayResize(signals,newIndex+1);
       signals[newIndex] = info;
+     }
+
+   void              CollectPerformanceStats(StrategyPerformance &stats[])
+     {
+      ArrayResize(stats,0);
+      datetime now = TimeCurrent();
+      datetime dayStart = now - (now % 86400);
+      if(!HistorySelect(dayStart,now))
+         return;
+
+      PerfAccumulator acc[];
+
+      for(int i=HistoryDealsTotal()-1;i>=0;i--)
+        {
+         ulong ticket = HistoryDealGetTicket(i);
+         if(ticket == 0)
+            continue;
+         datetime dealTime = (datetime)HistoryDealGetInteger(ticket,DEAL_TIME);
+         if(dealTime < dayStart)
+            break;
+         long entry = HistoryDealGetInteger(ticket,DEAL_ENTRY);
+         if(entry != DEAL_ENTRY_OUT && entry != DEAL_ENTRY_INOUT)
+            continue;
+         double profit = HistoryDealGetDouble(ticket,DEAL_PROFIT)
+                         + HistoryDealGetDouble(ticket,DEAL_SWAP)
+                         + HistoryDealGetDouble(ticket,DEAL_COMMISSION);
+         string strategy = ResolveStrategyName(ticket);
+         int idx = FindPerfIndex(acc,strategy);
+         if(idx < 0)
+           {
+            idx = ArraySize(acc);
+            ArrayResize(acc,idx+1);
+            acc[idx].name   = strategy;
+            acc[idx].wins   = 0;
+            acc[idx].losses = 0;
+            acc[idx].winSum = 0.0;
+            acc[idx].lossSum= 0.0;
+            acc[idx].trades = 0;
+            acc[idx].best   = -DBL_MAX;
+            acc[idx].worst  = DBL_MAX;
+           }
+
+         acc[idx].trades++;
+         if(profit >= 0.0)
+           {
+            acc[idx].wins++;
+            acc[idx].winSum += profit;
+           }
+         else
+           {
+            acc[idx].losses++;
+            acc[idx].lossSum += profit;
+           }
+
+         if(profit > acc[idx].best)
+            acc[idx].best = profit;
+         if(profit < acc[idx].worst)
+            acc[idx].worst = profit;
+        }
+
+      int total = ArraySize(acc);
+      ArrayResize(stats,total);
+      for(int i=0;i<total;i++)
+        {
+         StrategyPerformance perf;
+         perf.name        = acc[i].name;
+         perf.tradesToday = acc[i].trades;
+         perf.winRate     = (acc[i].trades == 0) ? 0.0 : (double)acc[i].wins / acc[i].trades * 100.0;
+         perf.avgProfit   = (acc[i].wins == 0) ? 0.0 : acc[i].winSum / acc[i].wins;
+         perf.avgLoss     = (acc[i].losses == 0) ? 0.0 : acc[i].lossSum / acc[i].losses;
+         perf.bestTrade   = (acc[i].best == -DBL_MAX ? 0.0 : acc[i].best);
+         perf.worstTrade  = (acc[i].worst == DBL_MAX ? 0.0 : acc[i].worst);
+         stats[i] = perf;
+        }
+     }
+
+   int               FindPerfIndex(PerfAccumulator &acc[],const string strategy) const
+     {
+      for(int i=0;i<ArraySize(acc);i++)
+        {
+         if(acc[i].name == strategy)
+            return(i);
+        }
+      return(-1);
+     }
+
+   string            ResolveStrategyName(const ulong dealTicket) const
+     {
+      string comment = HistoryDealGetString(dealTicket,DEAL_COMMENT);
+      if(comment != "")
+         return(comment);
+      long magic = HistoryDealGetInteger(dealTicket,DEAL_MAGIC);
+      if(magic != 0)
+         return(StringFormat("MAGIC-%d",(int)magic));
+      return(HistoryDealGetString(dealTicket,DEAL_SYMBOL));
      }
   };
 
