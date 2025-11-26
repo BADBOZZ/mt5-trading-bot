@@ -1,3 +1,6 @@
+#ifndef __MT5_COMMON_MQH__
+#define __MT5_COMMON_MQH__
+
 #property strict
 
 #include <stderror.mqh>
@@ -31,3 +34,5 @@ namespace Mt5Common
       PrintFormat("%s %s failed. Error %d - %s", component, context, errorCode, ErrorDescription(errorCode));
    }
 }
+
+#endif // __MT5_COMMON_MQH__
