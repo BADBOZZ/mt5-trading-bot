@@ -37,6 +37,7 @@ private:
 
    string   m_bgName;
    string   m_textName;
+   int      m_lastHeight;
 
    bool              CreateObjects()
      {
@@ -105,7 +106,8 @@ public:
                        m_textColor(clrWhite),
                        m_positiveColor(clrLime),
                        m_negativeColor(clrTomato),
-                       m_backgroundColor(clrBlack)
+                       m_backgroundColor(clrBlack),
+                       m_lastHeight(220)
                        {}
 
    bool              Init(const long chartId,
@@ -177,7 +179,8 @@ public:
       string lines[];
       if(StringSplit(content,'\n',lines) > 0)
          lineCount = ArraySize(lines);
-      ObjectSetInteger(m_chartId,m_bgName,OBJPROP_YSIZE,lineCount*(m_fontSize+6)+10);
+      m_lastHeight = lineCount*(m_fontSize+6)+10;
+      ObjectSetInteger(m_chartId,m_bgName,OBJPROP_YSIZE,m_lastHeight);
       SyncVisibility();
      }
 
@@ -224,5 +227,10 @@ public:
       m_ready = false;
       ObjectDelete(m_chartId,m_bgName);
       ObjectDelete(m_chartId,m_textName);
+     }
+
+   int               Height() const
+     {
+      return(m_lastHeight);
      }
   };

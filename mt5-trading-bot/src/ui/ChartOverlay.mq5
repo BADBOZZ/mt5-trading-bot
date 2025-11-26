@@ -22,6 +22,7 @@ input color  InpPanelBackground  = clrBlack;
 input int    InpPanelWidth       = 300;
 input int    InpPanelOffsetX     = 10;
 input int    InpPanelOffsetY     = 10;
+input int    InpPanelPadding     = 12;
 
 enum ENUM_OVERLAY_POSITION
   {
@@ -41,8 +42,10 @@ private:
    ENUM_BASE_CORNER m_corner;
 
    InfoPanel        m_infoPanel;
+   PositionDisplay  m_positionDisplay;
    RiskSnapshot     m_riskSnapshot;
    StrategyStatus   m_strategyStatuses[];
+   PositionRow      m_positionRows[];
 
 public:
                      ChartOverlayController()
@@ -70,6 +73,20 @@ public:
          InpPanelBackground))
          return(false);
 
+      if(!m_positionDisplay.Init(
+         m_chartId,
+         "MT5BOT",
+         m_corner,
+         InpPanelOffsetX,
+         InpPanelOffsetY + m_infoPanel.Height() + InpPanelPadding,
+         InpPanelWidth,
+         InpFontSize,
+         InpPrimaryColor,
+         InpPositiveColor,
+         InpNegativeColor,
+         InpPanelBackground))
+         return(false);
+
       m_initialized = true;
       return(true);
      }
@@ -82,12 +99,16 @@ public:
       CollectRiskSnapshot(m_riskSnapshot);
       CollectStrategyStatuses(m_strategyStatuses);
       m_infoPanel.Update(m_riskSnapshot,m_strategyStatuses);
+      CollectPositionRows(m_positionRows);
+      UpdateLayout();
+      m_positionDisplay.Update(m_positionRows);
      }
 
    void              Shutdown()
      {
       m_initialized = false;
       m_infoPanel.Destroy();
+      m_positionDisplay.Destroy();
      }
 
    ENUM_BASE_CORNER  GetCornerFromInput() const
@@ -143,6 +164,30 @@ public:
    void              CollectStrategyStatuses(StrategyStatus &statuses[])
      {
       ArrayResize(statuses,0);
+     }
+
+   void              CollectPositionRows(PositionRow &rows[])
+     {
+      int total = PositionsTotal();
+      ArrayResize(rows,total);
+      CPositionInfo pos;
+      for(int i=0;i<total;i++)
+        {
+         if(!pos.SelectByIndex(i))
+            continue;
+         rows[i].symbol    = pos.Symbol();
+         rows[i].type      = pos.PositionType()==POSITION_TYPE_BUY ? "BUY" : "SELL";
+         rows[i].volume    = pos.Volume();
+         rows[i].profit    = pos.Profit();
+         rows[i].stopLoss  = pos.StopLoss();
+         rows[i].takeProfit= pos.TakeProfit();
+        }
+     }
+
+   void              UpdateLayout()
+     {
+      int posOffset = InpPanelOffsetY + m_infoPanel.Height() + InpPanelPadding;
+      m_positionDisplay.SetCorner(m_corner,InpPanelOffsetX,posOffset);
      }
   };
 
