@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from src.backtesting.engine import StrategyTesterIntegration
+from src.backtesting.optimizer import OptimizationScriptBuilder
 
 
 def _parse_date(value: str) -> datetime:
@@ -33,6 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--train-months", type=int, default=3, help="Walk-forward train window size")
     parser.add_argument("--test-months", type=int, default=1, help="Walk-forward test window size")
     parser.add_argument("--execute", action="store_true", help="Execute the generated jobs immediately")
+    parser.add_argument("--set-file", help="Optional path for generated .set optimization file")
     return parser.parse_args()
 
 
@@ -79,6 +81,13 @@ def main() -> None:
                 enable_optimization=args.optimization,
             )
         ]
+
+    if args.set_file:
+        builder = OptimizationScriptBuilder()
+        set_path = Path(args.set_file).expanduser()
+        builder.write_set_file(set_path)
+        print(f"Optimization parameter description:\n{builder.describe()}")
+        print(f"Wrote MT5 .set file to {set_path}")
 
     print(integration.summarize_job_plan(jobs))
 
