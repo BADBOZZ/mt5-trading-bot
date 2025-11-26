@@ -62,6 +62,15 @@ class RiskState:
     
     def get_total_exposure(self) -> float:
         """Get total exposure."""
-        if not self.account_state:
+        if not self.account_state or self.account_state.equity <= 0:
+            # Without a valid equity baseline we cannot compute exposure safely.
             return 0.0
-        return sum(p.volume * p.current_price for p in self.positions) / self.account_state.equity
+        
+        total_position_value = sum(
+            abs(p.volume) * max(p.current_price, 0.0) for p in self.positions
+        )
+        
+        if total_position_value == 0:
+            return 0.0
+        
+        return total_position_value / self.account_state.equity

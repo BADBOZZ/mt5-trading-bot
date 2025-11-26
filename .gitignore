@@ -1,9 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
 # MQL5
 *.ex5
 *.ex4
 *.mq5
 *.mq4
 *.log
+# Track the safety validator reference implementation
+!mt5-trading-bot/src/security/SafetyValidator.mq5
 
 # Build
 MQL5/Logs/
