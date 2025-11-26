@@ -1,8 +1,13 @@
 # MQL5
 *.ex5
 *.ex4
+# MQL5
 *.mq5
 *.mq4
+
+# Allow checked-in Strategy Tester artifacts
+!/mt5-trading-bot/src/backtesting/PerformanceAnalyzer.mq5
+!/mt5-trading-bot/tests/BacktestConfig.mq5
 *.log
 
 # Build
