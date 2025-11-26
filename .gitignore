@@ -3,6 +3,10 @@
 *.ex4
 *.mq5
 *.mq4
+
+# Allow tracked EA overlay sources
+!mt5-trading-bot/src/ui/*.mq5
+!mt5-trading-bot/src/ui/**/*.mq5
 *.log
 
 # Build
