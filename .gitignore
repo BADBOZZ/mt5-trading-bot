@@ -2,6 +2,8 @@
 *.ex5
 *.ex4
 *.mq5
+!mt5-trading-bot/src/mt5/
+!mt5-trading-bot/src/mt5/*.mq5
 *.mq4
 *.log
 
