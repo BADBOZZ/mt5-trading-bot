@@ -9,11 +9,14 @@ def calculate_position_size(
     risk_config: RiskConfig
 ) -> float:
     """Calculate position size based on risk."""
-    risk_amount = account_balance * risk_config.risk_per_trade_pct
+    if account_balance <= 0 or entry_price <= 0 or stop_loss_price <= 0:
+        return 0.0
+    
+    risk_amount = account_balance * abs(risk_config.risk_per_trade_pct)
     price_diff = abs(entry_price - stop_loss_price)
     
     if price_diff == 0:
-        return 0
+        return 0.0
     
     position_size = risk_amount / price_diff
     
