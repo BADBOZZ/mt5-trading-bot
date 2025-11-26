@@ -3,6 +3,7 @@
 *.ex4
 *.mq5
 *.mq4
+!mt5-trading-bot/src/**/*.mq5
 *.log
 
 # Build
