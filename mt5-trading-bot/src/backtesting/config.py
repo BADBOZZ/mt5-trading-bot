@@ -74,6 +74,7 @@ class BacktestSettings:
     spread_points: float = 15.0
     slippage_points: float = 1.0
     commission_per_lot: float = 7.0
+    reward_risk_ratio: float = 2.0
     risk_free_rate: float = 0.02
     timezone: str = "UTC"
     data_granularity: str = "M1"
