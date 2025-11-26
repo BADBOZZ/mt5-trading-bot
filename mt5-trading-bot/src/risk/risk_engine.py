@@ -47,17 +47,32 @@ class RiskEngine:
         return True
     
     def calculate_position_size(self, recommendation: StrategyRecommendation) -> float:
-        """Calculate position size for recommendation."""
+        """Calculate position size for recommendation in lots."""
         if not self.risk_state.account_state:
-            return 0.0
+            return 0.01  # Return minimum lot size
         
         stop_loss = recommendation.stop_loss or (
             recommendation.entry_price * (1 - self.config.stop_loss_pct)
         )
         
-        return calculate_position_size(
+        # Determine point value based on symbol (0.0001 for most, 0.00001 for JPY pairs)
+        symbol = recommendation.symbol
+        if 'JPY' in symbol:
+            point_value = 0.01  # JPY pairs use 0.01 as point
+        else:
+            point_value = 0.0001  # Most pairs use 0.0001
+        
+        # Calculate position size directly in lots
+        position_size_lots = calculate_position_size(
             self.risk_state.account_state.equity,
             recommendation.entry_price,
             stop_loss,
-            self.config
+            self.config,
+            point_value=point_value,
+            contract_size=100000
         )
+        
+        # Ensure reasonable limits
+        position_size_lots = max(0.01, min(position_size_lots, 10.0))  # Max 10 lots
+        
+        return position_size_lots

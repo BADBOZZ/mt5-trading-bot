@@ -3,10 +3,15 @@
 *.ex4
 *.mq5
 *.mq4
+<<<<<<< HEAD
 
 # Allow tracked EA overlay sources
 !mt5-trading-bot/src/ui/*.mq5
 !mt5-trading-bot/src/ui/**/*.mq5
+=======
+!mt5-trading-bot/src/**/*.mq5
+!mt5-trading-bot/src/**/*.mqh
+>>>>>>> origin/cursor/implement-trading-bot-risk-management-system-bb8f
 *.log
 
 # Build
