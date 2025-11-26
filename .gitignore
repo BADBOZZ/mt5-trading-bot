@@ -5,6 +5,9 @@
 *.mq4
 *.log
 
+# Allow committed strategy sources
+!mt5-trading-bot/src/ai/MLStrategy.mq5
+
 # Build
 MQL5/Logs/
 MQL5/Files/
