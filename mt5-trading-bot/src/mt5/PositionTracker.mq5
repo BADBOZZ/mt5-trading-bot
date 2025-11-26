@@ -1,6 +1,7 @@
 #property strict
 
 #include <Trade\Trade.mqh>
+#include "Mt5Common.mqh"
 
 struct PositionInfo
 {
@@ -46,12 +47,15 @@ public:
       m_magic      = magic;
       m_trade.SetExpertMagicNumber(magic);
       m_maxRetries = MathMax(1, retries);
-      m_retryDelay = MathMax(50, retryDelayMs);
+      m_retryDelay = Mt5Common::NormalizeDelay(retryDelayMs, 50);
       Refresh();
    }
 
    int Refresh()
    {
+      if(!EnsureConnection("Refresh"))
+         return 0;
+
       ArrayFree(m_positions);
       const int total = PositionsTotal();
 
@@ -101,6 +105,9 @@ public:
 
    bool ModifyPosition(const ulong ticket, const double sl, const double tp)
    {
+      if(!EnsureConnection("ModifyPosition"))
+         return false;
+
       ResetLastError();
       for(int attempt = 0; attempt < m_maxRetries; attempt++)
       {
@@ -116,6 +123,9 @@ public:
 
    bool ClosePosition(const ulong ticket, const double deviation = 10)
    {
+      if(!EnsureConnection("ClosePosition"))
+         return false;
+
       ResetLastError();
       for(int attempt = 0; attempt < m_maxRetries; attempt++)
       {
@@ -136,6 +146,9 @@ public:
          Print("PositionTracker RefreshHistory: invalid range");
          return 0;
       }
+
+      if(!EnsureConnection("RefreshHistory"))
+         return 0;
 
       if(!HistorySelect(from_time, to_time))
       {
@@ -223,8 +236,13 @@ private:
    void LogTrackerError(const string context) const
    {
       int err = _LastError;
-      PrintFormat("PositionTracker %s failed. Error %d", context, err);
+      Mt5Common::LogError("PositionTracker", context, err);
       ResetLastError();
       Sleep(m_retryDelay);
+   }
+
+   bool EnsureConnection(const string context) const
+   {
+      return Mt5Common::EnsureConnection("PositionTracker " + context, m_maxRetries, m_retryDelay);
    }
 };

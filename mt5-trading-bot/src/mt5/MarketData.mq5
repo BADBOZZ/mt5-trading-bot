@@ -1,3 +1,5 @@
+#include "Mt5Common.mqh"
+
 #property strict
 
 class MarketData
@@ -14,17 +16,23 @@ public:
       m_symbol           = symbol;
       m_defaultTimeframe = timeframe;
       m_maxRetries       = MathMax(1, retries);
-      m_retryDelay       = MathMax(50, retryDelayMs);
+      m_retryDelay       = Mt5Common::NormalizeDelay(retryDelayMs, 50);
    }
 
    bool GetLastTick(MqlTick &tick) const
    {
+      if(!EnsureConnection("GetLastTick"))
+         return false;
+
       const string useSymbol = ResolveSymbol("");
       return SymbolInfoTick(useSymbol, tick);
    }
 
    int CopyRecentTicks(MqlTick &ticks[], const int requested, const ENUM_COPY_TICKS flags = COPY_TICKS_ALL) const
    {
+      if(!EnsureConnection("CopyRecentTicks"))
+         return 0;
+
       const string useSymbol = ResolveSymbol("");
       ResetLastError();
       int copied = CopyTicks(useSymbol, ticks, flags, 0, requested);
@@ -35,6 +43,9 @@ public:
 
    int CopyHistoricalTicks(MqlTick &ticks[], datetime from, const int requested, const ENUM_COPY_TICKS flags = COPY_TICKS_TRADE) const
    {
+      if(!EnsureConnection("CopyHistoricalTicks"))
+         return 0;
+
       const string useSymbol = ResolveSymbol("");
       ResetLastError();
       ulong start = (ulong)from;
@@ -46,6 +57,9 @@ public:
 
    int CopyBars(MqlRates &rates[], const int count, const ENUM_TIMEFRAMES timeframe = PERIOD_CURRENT) const
    {
+      if(!EnsureConnection("CopyBars"))
+         return 0;
+
       const string useSymbol = ResolveSymbol("");
       const ENUM_TIMEFRAMES tf = (timeframe == PERIOD_CURRENT ? m_defaultTimeframe : timeframe);
 
@@ -65,6 +79,9 @@ public:
          return 0;
       }
 
+      if(!EnsureConnection("CopyBarsRange"))
+         return 0;
+
       const string useSymbol = ResolveSymbol("");
       const ENUM_TIMEFRAMES tf = (timeframe == PERIOD_CURRENT ? m_defaultTimeframe : timeframe);
 
@@ -77,6 +94,9 @@ public:
 
    bool GetRateAt(const int shift, MqlRates &rate, const ENUM_TIMEFRAMES timeframe = PERIOD_CURRENT) const
    {
+      if(!EnsureConnection("GetRateAt"))
+         return false;
+
       MqlRates rates[];
       const int copied = CopyRates(ResolveSymbol(""), timeframe == PERIOD_CURRENT ? m_defaultTimeframe : timeframe, shift, 1, rates);
       if(copied <= 0)
@@ -90,6 +110,9 @@ public:
 
    bool GetSymbolInfo(MqlTick &tick, double &point, double &spread, double &lotStep) const
    {
+      if(!EnsureConnection("GetSymbolInfo"))
+         return false;
+
       const string useSymbol = ResolveSymbol("");
       if(!SymbolInfoTick(useSymbol, tick))
          return false;
@@ -102,6 +125,9 @@ public:
 
    bool GetOrderBook(MqlBookInfo &book[]) const
    {
+      if(!EnsureConnection("GetOrderBook"))
+         return false;
+
       ArrayFree(book);
       if(!MarketBookGet(ResolveSymbol(""), book))
       {
@@ -113,6 +139,9 @@ public:
 
    bool EnsureSymbolSelected(const string symbol = NULL) const
    {
+      if(!EnsureConnection("EnsureSymbolSelected"))
+         return false;
+
       const string useSymbol = ResolveSymbol(symbol);
       if(SymbolSelect(useSymbol, true))
          return true;
@@ -132,8 +161,13 @@ private:
    void LogMarketError(const string context) const
    {
       const int err = _LastError;
-      PrintFormat("MarketData %s failed. Error %d", context, err);
+      Mt5Common::LogError("MarketData", context, err);
       ResetLastError();
       Sleep(m_retryDelay);
+   }
+
+   bool EnsureConnection(const string context) const
+   {
+      return Mt5Common::EnsureConnection("MarketData " + context, m_maxRetries, m_retryDelay);
    }
 };

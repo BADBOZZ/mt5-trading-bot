@@ -1,5 +1,7 @@
 #property strict
 
+#include "Mt5Common.mqh"
+
 struct AccountSnapshot
 {
    datetime timestamp;
@@ -23,12 +25,15 @@ public:
    void Init(const int retries = 3, const int retryDelayMs = 250)
    {
       m_maxRetries = MathMax(1, retries);
-      m_retryDelay = MathMax(50, retryDelayMs);
+      m_retryDelay = Mt5Common::NormalizeDelay(retryDelayMs, 50);
       Refresh();
    }
 
    bool Refresh()
    {
+      if(!EnsureConnection("Refresh"))
+         return false;
+
       bool ok = false;
       for(int attempt = 0; attempt < m_maxRetries; attempt++)
       {
@@ -85,6 +90,9 @@ public:
 
    double CalculateRequiredMargin(const string symbol, const ENUM_ORDER_TYPE type, const double volume, const double price = 0.0)
    {
+      if(!EnsureConnection("CalculateRequiredMargin"))
+         return -1.0;
+
       double margin = 0.0;
       if(!OrderCalcMargin(type, symbol, volume, price, margin))
       {
@@ -96,6 +104,9 @@ public:
 
    double CalculateProfit(const string symbol, const ENUM_ORDER_TYPE type, const double volume, const double price_open, const double price_close)
    {
+      if(!EnsureConnection("CalculateProfit"))
+         return 0.0;
+
       double profit = 0.0;
       if(!OrderCalcProfit(type, symbol, volume, price_open, price_close, profit))
       {
@@ -107,6 +118,9 @@ public:
 
    bool HasSufficientMargin(const string symbol, const ENUM_ORDER_TYPE type, const double volume, const double price = 0.0, const double bufferPercent = 5.0)
    {
+      if(!EnsureConnection("HasSufficientMargin"))
+         return false;
+
       double margin = CalculateRequiredMargin(symbol, type, volume, price);
       if(margin < 0.0)
          return false;
@@ -140,8 +154,13 @@ private:
    void LogAccountError(const string context) const
    {
       const int err = _LastError;
-      PrintFormat("AccountManager %s failed. Error %d", context, err);
+      Mt5Common::LogError("AccountManager", context, err);
       Sleep(m_retryDelay);
       ResetLastError();
+   }
+
+   bool EnsureConnection(const string context) const
+   {
+      return Mt5Common::EnsureConnection("AccountManager " + context, m_maxRetries, m_retryDelay);
    }
 };

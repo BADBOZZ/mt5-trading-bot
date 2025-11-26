@@ -1,7 +1,7 @@
 #property strict
 
 #include <Trade\Trade.mqh>
-#include <stderror.mqh>
+#include "Mt5Common.mqh"
 
 struct OrderHistoryEntry
 {
@@ -33,7 +33,7 @@ public:
       m_magic         = (magic == 0 ? (uint)GetTickCount() : magic);
       m_trade.SetExpertMagicNumber(m_magic);
       m_maxRetries    = MathMax(1, retries);
-      m_retryDelay    = MathMax(100, retryDelayMs);
+      m_retryDelay    = Mt5Common::NormalizeDelay(retryDelayMs, 100);
    }
 
    // --- Market orders ---
@@ -235,26 +235,14 @@ private:
    void LogTradeError(const string context)
    {
       const int errorCode = _LastError;
-      PrintFormat("OrderManager %s failed. Error %d - %s", context, errorCode, ErrorDescription(errorCode));
+      Mt5Common::LogError("OrderManager", context, errorCode);
       Sleep(m_retryDelay);
       ResetLastError();
    }
 
    bool EnsureConnection(const string context) const
    {
-      if(TerminalInfoInteger(TERMINAL_CONNECTED))
-         return true;
-
-      PrintFormat("OrderManager %s waiting for terminal connection...", context);
-      for(int attempt = 0; attempt < 5; attempt++)
-      {
-         Sleep(m_retryDelay);
-         if(TerminalInfoInteger(TERMINAL_CONNECTED))
-            return true;
-      }
-
-      PrintFormat("OrderManager %s aborted: terminal disconnected.", context);
-      return false;
+      return Mt5Common::EnsureConnection("OrderManager " + context, 5, m_retryDelay);
    }
 
    string ResolveSymbol(const string symbol) const
