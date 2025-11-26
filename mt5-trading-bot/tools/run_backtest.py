@@ -7,10 +7,16 @@ import argparse
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
-from src.backtesting.config import StrategyTesterConfig, SymbolConfig
+from src.backtesting.config import (
+    OptimizationInputRange,
+    StrategyTesterConfig,
+    SymbolConfig,
+)
 from src.backtesting.engine import StrategyTesterError, StrategyTesterIntegration
+from src.backtesting.optimizer import GridSearchOptimizer
+from src.backtesting.walkforward import SlidingWindowWalkForward
 
 
 def parse_date(value: str) -> datetime:
@@ -34,6 +40,34 @@ def build_symbols(symbols: List[str], timeframe: str) -> List[SymbolConfig]:
     if not symbols:
         return [SymbolConfig(name="EURUSD", timeframe=timeframe)]
     return [SymbolConfig(name=symbol.strip().upper(), timeframe=timeframe) for symbol in symbols]
+
+
+def parse_optimization_ranges(definitions: List[str]) -> Dict[str, OptimizationInputRange]:
+    ranges: Dict[str, OptimizationInputRange] = {}
+    for definition in definitions:
+        try:
+            name, start, step, stop = definition.split(":")
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(
+                f"Invalid optimization definition '{definition}'. Use name:start:step:stop."
+            ) from exc
+        ranges[name] = OptimizationInputRange(
+            name=name,
+            start=float(start),
+            step=float(step),
+            stop=float(stop),
+        )
+    return ranges
+
+
+def parse_walkforward(value: str) -> Tuple[int, int, Optional[int]]:
+    parts = value.split(":")
+    if len(parts) not in (2, 3):
+        raise argparse.ArgumentTypeError("Walk-forward format must be train:test[:step] in days.")
+    train_days = int(parts[0])
+    test_days = int(parts[1])
+    step_days = int(parts[2]) if len(parts) == 3 else None
+    return train_days, test_days, step_days
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -65,6 +99,17 @@ def create_parser() -> argparse.ArgumentParser:
         default=[],
         help="Override EA input in key=value form. Repeat for multiple overrides.",
     )
+    parser.add_argument(
+        "--optimize",
+        action="append",
+        default=[],
+        help="Enable parameter optimization in name:start:step:stop format.",
+    )
+    parser.add_argument(
+        "--walkforward",
+        type=parse_walkforward,
+        help="Enable walk-forward analysis with train:test[:step] day lengths.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Generate configuration without launching MT5.")
     return parser
 
@@ -72,6 +117,8 @@ def create_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = create_parser()
     args = parser.parse_args()
+
+    optimization_inputs = parse_optimization_ranges(args.optimize)
 
     config = StrategyTesterConfig(
         expert_path=Path(args.ea).expanduser().resolve(),
@@ -81,9 +128,26 @@ def main() -> int:
         end=args.end,
         symbols=build_symbols(args.symbols, args.timeframe),
         custom_inputs=parse_inputs(args.input),
+        optimization_inputs=optimization_inputs,
     )
 
-    tester = StrategyTesterIntegration(config)
+    optimizer = (
+        GridSearchOptimizer.from_ranges(optimization_inputs.values())
+        if optimization_inputs
+        else None
+    )
+    walkforward_runner = (
+        SlidingWindowWalkForward(
+            config=config,
+            train_days=args.walkforward[0],
+            test_days=args.walkforward[1],
+            step_days=args.walkforward[2],
+        )
+        if args.walkforward
+        else None
+    )
+
+    tester = StrategyTesterIntegration(config, optimizer=optimizer, walkforward=walkforward_runner)
 
     if args.dry_run:
         symbol = config.primary_symbol
