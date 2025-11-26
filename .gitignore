@@ -1,0 +1,21 @@
+# MQL5
+*.ex5
+*.ex4
+*.mq5
+*.mq4
+*.log
+
+# Build
+MQL5/Logs/
+MQL5/Files/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node modules (if any)
+node_modules/
