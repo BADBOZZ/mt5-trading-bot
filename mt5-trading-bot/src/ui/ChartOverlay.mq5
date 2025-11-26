@@ -6,6 +6,7 @@
 
 #include <Trade\PositionInfo.mqh>
 #include <Trade\DealInfo.mqh>
+#include <Trade\Trade.mqh>
 
 #include "InfoPanel.mqh"
 #include "PositionDisplay.mqh"
@@ -23,6 +24,11 @@ input int    InpPanelWidth       = 300;
 input int    InpPanelOffsetX     = 10;
 input int    InpPanelOffsetY     = 10;
 input int    InpPanelPadding     = 12;
+input bool   InpShowPositionsPanel = true;
+input bool   InpShowSignalsPanel   = true;
+input bool   InpShowPerformancePanel = true;
+input string InpSignalPrefix       = "MT5BOT_SIGNAL|";
+input string InpStrategyPrefix     = "MT5BOT_STRATEGY|";
 
 enum ENUM_OVERLAY_POSITION
   {
@@ -43,21 +49,30 @@ private:
 
    InfoPanel        m_infoPanel;
    PositionDisplay  m_positionDisplay;
+   SignalDisplay    m_signalDisplay;
    RiskSnapshot     m_riskSnapshot;
    StrategyStatus   m_strategyStatuses[];
    PositionRow      m_positionRows[];
+    SignalInfo       m_signalRows[];
+
+   bool             m_showPositions;
+   bool             m_showSignals;
 
 public:
                      ChartOverlayController()
                      : m_chartId(0),
                        m_initialized(false),
-                       m_corner(CORNER_RIGHT_UPPER)
+                       m_corner(CORNER_RIGHT_UPPER),
+                       m_showPositions(true),
+                       m_showSignals(true)
                        {}
 
    bool              Init(const long chartId)
      {
       m_chartId     = chartId;
       m_corner      = GetCornerFromInput();
+      m_showPositions = InpShowPositionsPanel;
+      m_showSignals   = InpShowSignalsPanel;
 
       if(!m_infoPanel.Init(
          m_chartId,
@@ -86,6 +101,22 @@ public:
          InpNegativeColor,
          InpPanelBackground))
          return(false);
+      m_positionDisplay.SetVisible(m_showPositions);
+
+      if(!m_signalDisplay.Init(
+         m_chartId,
+         "MT5BOT",
+         m_corner,
+         InpPanelOffsetX,
+         InpPanelOffsetY + m_infoPanel.Height() + m_positionDisplay.Height() + (InpPanelPadding*2),
+         InpPanelWidth,
+         InpFontSize,
+         InpPrimaryColor,
+         InpPositiveColor,
+         InpNegativeColor,
+         InpPanelBackground))
+         return(false);
+      m_signalDisplay.SetVisible(m_showSignals);
 
       m_initialized = true;
       return(true);
@@ -99,9 +130,28 @@ public:
       CollectRiskSnapshot(m_riskSnapshot);
       CollectStrategyStatuses(m_strategyStatuses);
       m_infoPanel.Update(m_riskSnapshot,m_strategyStatuses);
-      CollectPositionRows(m_positionRows);
-      UpdateLayout();
-      m_positionDisplay.Update(m_positionRows);
+      int nextOffset = InpPanelOffsetY + m_infoPanel.Height() + InpPanelPadding;
+
+      if(m_showPositions)
+        {
+         CollectPositionRows(m_positionRows);
+         m_positionDisplay.SetCorner(m_corner,InpPanelOffsetX,nextOffset);
+         m_positionDisplay.SetVisible(true);
+         m_positionDisplay.Update(m_positionRows);
+         nextOffset += m_positionDisplay.Height() + InpPanelPadding;
+        }
+      else
+         m_positionDisplay.SetVisible(false);
+
+      if(m_showSignals)
+        {
+         CollectSignalInfo(m_signalRows);
+         m_signalDisplay.SetCorner(m_corner,InpPanelOffsetX,nextOffset);
+         m_signalDisplay.SetVisible(true);
+         m_signalDisplay.Update(m_signalRows);
+        }
+      else
+         m_signalDisplay.SetVisible(false);
      }
 
    void              Shutdown()
@@ -109,6 +159,7 @@ public:
       m_initialized = false;
       m_infoPanel.Destroy();
       m_positionDisplay.Destroy();
+      m_signalDisplay.Destroy();
      }
 
    ENUM_BASE_CORNER  GetCornerFromInput() const
@@ -161,9 +212,38 @@ public:
       return(pnl);
      }
 
+   bool              ExtractKeyParts(const string name,const string prefix,string &first,string &second) const
+     {
+      if(StringFind(name,prefix) != 0)
+         return(false);
+      string payload = StringSubstr(name,StringLen(prefix));
+      string parts[];
+      int count = StringSplit(payload,'|',parts);
+      if(count < 2)
+         return(false);
+      first  = parts[0];
+      second = parts[1];
+      return(true);
+     }
+
    void              CollectStrategyStatuses(StrategyStatus &statuses[])
      {
       ArrayResize(statuses,0);
+      int total = GlobalVariablesTotal();
+      for(int i=0;i<total;i++)
+        {
+         string name = GlobalVariableName(i);
+         string strategy,symbol;
+         if(!ExtractKeyParts(name,InpStrategyPrefix,strategy,symbol))
+            continue;
+         StrategyStatus status;
+         status.name    = strategy;
+         status.symbol  = symbol;
+         status.enabled = (GlobalVariableGet(name) >= 1.0);
+         int newIndex = ArraySize(statuses);
+         ArrayResize(statuses,newIndex+1);
+         statuses[newIndex] = status;
+        }
      }
 
    void              CollectPositionRows(PositionRow &rows[])
@@ -184,10 +264,58 @@ public:
         }
      }
 
-   void              UpdateLayout()
+   void              CollectSignalInfo(SignalInfo &signals[])
      {
-      int posOffset = InpPanelOffsetY + m_infoPanel.Height() + InpPanelPadding;
-      m_positionDisplay.SetCorner(m_corner,InpPanelOffsetX,posOffset);
+      ArrayResize(signals,0);
+      int total = GlobalVariablesTotal();
+      for(int i=0;i<total;i++)
+        {
+         string name = GlobalVariableName(i);
+         string strategy,symbol;
+         if(!ExtractKeyParts(name,InpSignalPrefix,strategy,symbol))
+            continue;
+         SignalInfo info;
+         info.strategy  = strategy;
+         info.symbol    = symbol;
+         double raw     = GlobalVariableGet(name);
+         info.type      = (raw >= 0.0 ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
+         info.confidence = MathMin(100.0,MathAbs(raw));
+         info.timestamp  = (datetime)GlobalVariableTime(name);
+         AppendSignal(signals,info);
+        }
+
+      if(ArraySize(signals) == 0)
+         CollectSignalsFromOrders(signals);
+     }
+
+   void              CollectSignalsFromOrders(SignalInfo &signals[])
+     {
+      ArrayResize(signals,0);
+      int total = OrdersTotal();
+      for(int i=0;i<total;i++)
+        {
+         ulong ticket = OrderGetTicket(i);
+         if(ticket == 0)
+            continue;
+         if(!OrderSelect(ticket,SELECT_BY_TICKET,MODE_TRADES))
+            continue;
+         SignalInfo info;
+         info.strategy = OrderGetString(ORDER_COMMENT);
+         if(info.strategy == "")
+            info.strategy = StringFormat("MAGIC-%d",(int)OrderGetInteger(ORDER_MAGIC));
+         info.symbol   = OrderGetString(ORDER_SYMBOL);
+         info.type     = (ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE);
+         info.confidence = MathMin(100.0,OrderGetDouble(ORDER_VOLUME_CURRENT)*100.0);
+         info.timestamp  = (datetime)OrderGetInteger(ORDER_TIME_SETUP);
+         AppendSignal(signals,info);
+        }
+     }
+
+   void              AppendSignal(SignalInfo &signals,const SignalInfo &info)
+     {
+      int newIndex = ArraySize(signals);
+      ArrayResize(signals,newIndex+1);
+      signals[newIndex] = info;
      }
   };
 
