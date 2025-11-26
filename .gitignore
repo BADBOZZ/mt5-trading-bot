@@ -5,6 +5,11 @@
 *.mq4
 *.log
 
+# keep curated MQL sources required for automation
+!mt5-trading-bot/src/backtesting/*.mq5
+!mt5-trading-bot/src/backtesting/*.mqh
+!mt5-trading-bot/tests/*.mq5
+
 # Build
 MQL5/Logs/
 MQL5/Files/
