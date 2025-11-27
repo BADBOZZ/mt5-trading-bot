@@ -97,11 +97,7 @@ int OnInit()
    }
    
    // Initialize risk limits
-   if(!RiskLimits::Initialize())
-   {
-      Print("ERROR: Risk limits initialization failed");
-      return INIT_FAILED;
-   }
+   RiskLimits::EnsureDailyContext();
    
    // Set up timer for periodic updates
    EventSetTimer(InpOverlayRefreshSeconds);
@@ -176,8 +172,8 @@ void OnTimer()
       g_overlay.Refresh();
    
    // Update risk limits
-   RiskLimits::UpdateDailyPnL();
-   RiskLimits::UpdateDrawdown();
+   RiskLimits::EnsureDailyContext();
+   RiskLimits::UpdatePeakEquity();
 }
 
 //+------------------------------------------------------------------+
@@ -245,7 +241,7 @@ bool IsSymbolInList(string symbol, string symbolList)
 bool CanTradeSymbol(string symbol)
 {
    // Safety checks
-   if(!SafetyChecks::PreTradeValidation(symbol))
+   if(!SafetyChecks::PreTradeValidation(symbol, ORDER_TYPE_BUY, 0.01, 0.0))
       return false;
    
    // Check position limits
@@ -256,7 +252,7 @@ bool CanTradeSymbol(string symbol)
       return false;
    
    // Check risk limits
-   if(!RiskLimits::CanOpenNewPosition())
+   if(RiskLimits::IsEmergencyStopActive())
       return false;
    
    return true;
